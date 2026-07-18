@@ -1,0 +1,3 @@
+2026-07-18 10:00:00 INFO User login successful
+2026-07-18 10:05:00 ERROR Connection timed out
+2026-07-18 10:10:00 CRITICAL Database cluster unavailable in us-east-1

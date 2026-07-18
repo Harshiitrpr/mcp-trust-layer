@@ -23,5 +23,6 @@ Thumbs.db
 .env
 *.local
 
-# Initial Objectives
+# Initial Objectives and implementation plan
 requirements.md
+implementation_plan.md
