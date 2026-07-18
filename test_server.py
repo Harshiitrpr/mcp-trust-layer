@@ -1,16 +1,20 @@
 import os
 import unittest
 import tempfile
+import dataclasses
+from unittest import mock
 from pathlib import Path
 
 # Set up test environment variables before importing Config
+os.makedirs("./mock_logs", exist_ok=True)
 os.environ["LOG_ANALYZER_BASE_DIR"] = "./mock_logs"
 os.environ["LOG_ANALYZER_MAX_FILE_SIZE"] = str(50 * 1024 * 1024)  # 50MB default for general tests
 os.environ["LOG_ANALYZER_MAX_PREVIEW_LINES"] = "10"
 os.environ["LOG_ANALYZER_MAX_SEARCH_RESULTS"] = "500"
 os.environ["LOG_ANALYZER_MAX_SEARCH_CHARS"] = "100000"
 
-from config import Config
+import config
+import server
 from security import (
     sanitize_filename,
     sanitize_keyword,
@@ -27,23 +31,30 @@ class TestSecureLogAnalyzer(unittest.TestCase):
         self.test_dir = tempfile.TemporaryDirectory()
         self.base_path = Path(self.test_dir.name).resolve()
         
-        # Override BASE_DIR in Config for isolated testing
-        self.original_base_dir = Config.BASE_DIR
-        Config.BASE_DIR = self.base_path
+        # Override BASE_DIR in Config for isolated testing using mock.patch
+        new_config = dataclasses.replace(server.Config, BASE_DIR=self.base_path)
+        self.config_patcher = mock.patch('server.Config', new_config)
+        self.config_patcher.start()
         
     def tearDown(self):
         # Restore original configuration and clean up temp folder
-        Config.BASE_DIR = self.original_base_dir
+        self.config_patcher.stop()
         self.test_dir.cleanup()
 
     # ==========================================
     # 1. Configuration Tests
     # ==========================================
     def test_config_loading(self):
-        self.assertEqual(Config.MAX_FILE_SIZE_BYTES, 50 * 1024 * 1024)
-        self.assertEqual(Config.MAX_PREVIEW_LINES, 10)
-        self.assertEqual(Config.MAX_SEARCH_RESULTS, 500)
-        self.assertEqual(Config.MAX_SEARCH_PAYLOAD_CHARS, 100000)
+        self.assertEqual(server.Config.MAX_FILE_SIZE_BYTES, 50 * 1024 * 1024)
+        self.assertEqual(server.Config.MAX_PREVIEW_LINES, 10)
+        self.assertEqual(server.Config.MAX_SEARCH_RESULTS, 500)
+        self.assertEqual(server.Config.MAX_SEARCH_PAYLOAD_CHARS, 100000)
+
+    def test_config_validation(self):
+        with self.assertRaises(ValueError):
+            config.AppConfig(MAX_FILE_SIZE_BYTES=-1)
+        with self.assertRaises(ValueError):
+            config.AppConfig(BASE_DIR=Path("/does/not/exist"))
 
     # ==========================================
     # 2. Input Sanitization Tests
@@ -209,9 +220,8 @@ class TestSecureLogAnalyzer(unittest.TestCase):
         self.assertEqual(files, ["a.log", "b.log", "c.log"])
 
     def test_view_log_summary_valid(self):
-        original_preview_lines = Config.MAX_PREVIEW_LINES
-        Config.MAX_PREVIEW_LINES = 3
-        try:
+        new_config = dataclasses.replace(server.Config, MAX_PREVIEW_LINES=3)
+        with mock.patch('server.Config', new_config):
             log_content = (
                 "Line 1: Normal system message\n"
                 "Line 2: Service token generated: AIzaSyB_1234567890ABCDEFGHIJKLMNOPQRSTU\n"
@@ -232,13 +242,10 @@ class TestSecureLogAnalyzer(unittest.TestCase):
                 "Line 3: password=[REDACTED TOKEN]"
             )
             self.assertEqual(summary["preview"], expected_preview)
-        finally:
-            Config.MAX_PREVIEW_LINES = original_preview_lines
 
     def test_view_log_summary_size_limit(self):
-        original_max_size = Config.MAX_FILE_SIZE_BYTES
-        Config.MAX_FILE_SIZE_BYTES = 5 * 1024  # 5KB
-        try:
+        new_config = dataclasses.replace(server.Config, MAX_FILE_SIZE_BYTES=5 * 1024)  # 5KB
+        with mock.patch('server.Config', new_config):
             log_file = self.base_path / "large.log"
             fd = os.open(log_file, os.O_WRONLY | os.O_CREAT)
             try:
@@ -248,8 +255,6 @@ class TestSecureLogAnalyzer(unittest.TestCase):
                 
             with self.assertRaises(ValueError):
                 view_log_summary("large.log")
-        finally:
-            Config.MAX_FILE_SIZE_BYTES = original_max_size
 
     def test_search_error_patterns_valid(self):
         log_content = (
@@ -284,9 +289,8 @@ class TestSecureLogAnalyzer(unittest.TestCase):
         self.assertIn("admin_token = [REDACTED TOKEN]", results)
 
     def test_search_error_patterns_truncation_results(self):
-        original_max_results = Config.MAX_SEARCH_RESULTS
-        Config.MAX_SEARCH_RESULTS = 2
-        try:
+        new_config = dataclasses.replace(server.Config, MAX_SEARCH_RESULTS=2)
+        with mock.patch('server.Config', new_config):
             log_content = (
                 "[ERROR] Match 1\n"
                 "[ERROR] Match 2\n"
@@ -302,13 +306,10 @@ class TestSecureLogAnalyzer(unittest.TestCase):
             self.assertIn("Match 2", results)
             self.assertNotIn("Match 3", results)
             self.assertIn("[WARNING: Results truncated. Showing first 2 of 3 total matches found.]", results)
-        finally:
-            Config.MAX_SEARCH_RESULTS = original_max_results
 
     def test_search_error_patterns_truncation_chars(self):
-        original_max_chars = Config.MAX_SEARCH_PAYLOAD_CHARS
-        Config.MAX_SEARCH_PAYLOAD_CHARS = 50
-        try:
+        new_config = dataclasses.replace(server.Config, MAX_SEARCH_PAYLOAD_CHARS=50)
+        with mock.patch('server.Config', new_config):
             log_content = (
                 "[ERROR] Match 1 with long message\n"
                 "[ERROR] Match 2 with long message\n"
@@ -321,8 +322,6 @@ class TestSecureLogAnalyzer(unittest.TestCase):
             self.assertIn("Match 1", results)
             self.assertNotIn("Match 2", results)
             self.assertIn("[WARNING: Results truncated. Showing first 1 of 2 total matches found.]", results)
-        finally:
-            Config.MAX_SEARCH_PAYLOAD_CHARS = original_max_chars
 
 if __name__ == "__main__":
     unittest.main()
