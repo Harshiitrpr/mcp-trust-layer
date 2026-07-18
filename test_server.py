@@ -61,8 +61,18 @@ class TestSecureLogAnalyzer(unittest.TestCase):
     # ==========================================
     def test_filename_sanitization_valid(self):
         self.assertEqual(sanitize_filename("api.log"), "api.log")
-        self.assertEqual(sanitize_filename("logs/api.log"), "logs/api.log")
-        self.assertEqual(sanitize_filename("sub_dir-1.2/sys.log"), "sub_dir-1.2/sys.log")
+        self.assertEqual(sanitize_filename("sys.log"), "sys.log")
+        self.assertEqual(sanitize_filename("sub_dir-1.2.log"), "sub_dir-1.2.log")
+
+    def test_filename_sanitization_absolute(self):
+        with self.assertRaises(ValueError):
+            sanitize_filename("/etc/passwd")
+        with self.assertRaises(ValueError):
+            sanitize_filename("C:\\Windows\\System32")
+
+    def test_filename_sanitization_nested(self):
+        with self.assertRaises(ValueError):
+            sanitize_filename("logs/api.log")
 
     def test_filename_sanitization_empty(self):
         with self.assertRaises(ValueError):

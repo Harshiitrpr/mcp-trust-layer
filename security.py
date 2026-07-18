@@ -18,8 +18,9 @@ MAX_FILENAME_LEN = 255
 MAX_KEYWORD_LEN = 100
 
 # Input validation regular expressions
-# Only allow letters, numbers, hyphens, underscores, dots, and forward slashes.
-# This explicitly prevents shell characters, absolute paths (colons, double backslashes), etc.
+# Restricts input to a predictable filename/path character set and rejects
+# shell metacharacters. Absolute-path and directory-containment enforcement
+# are performed separately.
 SAFE_FILENAME_REGEX = re.compile(r'^[a-zA-Z0-9_\-\./]+$')
 
 # Redaction regular expressions
@@ -47,12 +48,20 @@ def sanitize_filename(filename: str) -> str:
     if len(filename) > MAX_FILENAME_LEN:
         raise ValueError(f"Security Exception: Filename exceeds maximum length of {MAX_FILENAME_LEN} characters.")
 
+    # Explicitly reject absolute paths
+    if Path(filename).is_absolute():
+        raise ValueError("Security Exception: Absolute paths are not allowed.")
+
+    # Explicitly reject nested directories to minimize attack surface
+    if Path(filename).name != filename:
+        raise ValueError("Security Exception: Nested paths are not allowed.")
+
     # Prevent basic traversal sequences
     if ".." in filename or "\\" in filename:
         raise ValueError("Security Exception: Path traversal sequence (.. or \\) detected in filename.")
 
     # Match safe characters only
-    if not SAFE_FILENAME_REGEX.match(filename):
+    if SAFE_FILENAME_REGEX.fullmatch(filename) is None:
         raise ValueError("Security Exception: Invalid characters detected in filename.")
 
     return filename
