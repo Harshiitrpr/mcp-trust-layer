@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 from fastmcp import FastMCP
+from typing import TypedDict
 
 from config import Config
 from security import (
@@ -31,14 +32,14 @@ def list_log_files() -> list[str]:
     Lists files in the specific, designated safe directory.
     Only returns regular, non-symlinked files.
     """
-    logger.info("list_log_files: Invoked. BASE_DIR='%s'", Config.BASE_DIR)
+    logger.info("tool=list_log_files status=invoked BASE_DIR='%s'", Config.BASE_DIR)
     
     if not Config.BASE_DIR.exists():
-        logger.error("list_log_files: Configured BASE_DIR '%s' does not exist.", Config.BASE_DIR)
+        logger.error("tool=list_log_files status=error error_type=missing_dir directory='%s'", Config.BASE_DIR)
         raise FileNotFoundError(f"Safe log directory '{Config.BASE_DIR}' does not exist.")
     
     if not Config.BASE_DIR.is_dir():
-        logger.error("list_log_files: Configured BASE_DIR '%s' is not a directory.", Config.BASE_DIR)
+        logger.error("tool=list_log_files status=error error_type=not_a_directory directory='%s'", Config.BASE_DIR)
         raise ValueError(f"Safe log directory '{Config.BASE_DIR}' is not a directory.")
 
     try:
@@ -49,35 +50,41 @@ def list_log_files() -> list[str]:
                 if entry.is_file() and not entry.is_symlink():
                     files.append(entry.name)
             except OSError as entry_err:
-                logger.warning("list_log_files: Skipping unreadable entry '%s': %s", entry.name, entry_err)
+                logger.warning("tool=list_log_files status=skip file='%s' reason='%s'", entry.name, entry_err)
                 
         sorted_files = sorted(files)
-        logger.info("list_log_files: Found %d safe files.", len(sorted_files))
+        logger.info("tool=list_log_files status=success count=%d", len(sorted_files))
         return sorted_files
     except OSError as e:
-        logger.error("list_log_files: Failed to list directory contents: %s", e)
+        logger.error("tool=list_log_files status=error error_type=os_error details='%s'", e)
         raise ValueError(f"Error accessing safe log directory: {e.strerror}") from e
 
+class LogSummary(TypedDict):
+    filename: str
+    size_bytes: int
+    line_count: int
+    preview: str
+
 @mcp.tool()
-def view_log_summary(filename: str) -> dict:
+def view_log_summary(filename: str) -> LogSummary:
     """
     Reads a requested log file and returns its size, line count, and a brief preview.
     Protects against Path Traversal, TOCTOU, and out-of-memory DoS.
     """
-    logger.info("view_log_summary: Invoked. filename='%s'", filename)
+    logger.info("tool=view_log_summary status=invoked filename='%s'", filename)
     
     # 1. Path & Symlink validation
     try:
         secure_path = get_secure_path(filename, Config.BASE_DIR)
     except ValueError as val_err:
-        logger.warning("view_log_summary: Path validation failed for '%s': %s", filename, val_err)
+        logger.warning("tool=view_log_summary status=error error_type=validation_failed filename='%s' details='%s'", filename, val_err)
         raise
         
     # 2. Size Check
     size_bytes = os.path.getsize(secure_path)
     if size_bytes > Config.MAX_FILE_SIZE_BYTES:
         logger.warning(
-            "view_log_summary: File '%s' size (%d bytes) exceeds MAX_FILE_SIZE_BYTES limit (%d bytes).",
+            "tool=view_log_summary status=error error_type=file_too_large filename='%s' size_bytes=%d max_size_bytes=%d",
             filename, size_bytes, Config.MAX_FILE_SIZE_BYTES
         )
         raise ValueError(
@@ -100,7 +107,7 @@ def view_log_summary(filename: str) -> dict:
                 # Apply dynamic redaction line-by-line to prevent leakage
                 preview_lines.append(redact_sensitive_data(line.rstrip("\r\n")))
     except Exception as e:
-        logger.error("view_log_summary: Error processing file '%s': %s", filename, e)
+        logger.error("tool=view_log_summary status=error error_type=read_failed filename='%s' details='%s'", filename, e)
         raise
     finally:
         if file_obj:
@@ -112,7 +119,7 @@ def view_log_summary(filename: str) -> dict:
                 pass
 
     logger.info(
-        "view_log_summary: Successfully processed '%s'. Size: %d B, Lines: %d",
+        "tool=view_log_summary status=success filename='%s' size_bytes=%d line_count=%d",
         filename, size_bytes, line_count
     )
     
@@ -127,22 +134,23 @@ def view_log_summary(filename: str) -> dict:
 def search_error_patterns(filename: str, keyword: str) -> str:
     """
     Searches a given log file for specific keywords, with shell sanitization and output truncation.
+    Search is literal and case-insensitive.
     """
-    logger.info("search_error_patterns: Invoked. filename='%s', keyword='%s'", filename, keyword)
+    logger.info("tool=search_error_patterns status=invoked filename='%s' keyword='%s'", filename, keyword)
     
     # 1. Input & Payload Sanitization
     try:
         clean_keyword = sanitize_keyword(keyword)
         secure_path = get_secure_path(filename, Config.BASE_DIR)
     except ValueError as val_err:
-        logger.warning("search_error_patterns: Validation failed: %s", val_err)
+        logger.warning("tool=search_error_patterns status=error error_type=validation_failed details='%s'", val_err)
         raise
 
     # 2. Size Check
     size_bytes = os.path.getsize(secure_path)
     if size_bytes > Config.MAX_FILE_SIZE_BYTES:
         logger.warning(
-            "search_error_patterns: File '%s' size (%d bytes) exceeds limit.",
+            "tool=search_error_patterns status=error error_type=file_too_large filename='%s' size_bytes=%d",
             filename, size_bytes
         )
         raise ValueError(
@@ -155,13 +163,15 @@ def search_error_patterns(filename: str, keyword: str) -> str:
     total_matches_found = 0
     payload_chars = 0
     truncated = False
+    
+    search_term = clean_keyword.casefold()
 
     fd = open_file_safely(secure_path)
     file_obj = None
     try:
         file_obj = open(fd, "r", encoding="utf-8", errors="replace")
         for line_num, line in enumerate(file_obj, 1):
-            if clean_keyword in line:
+            if search_term in line.casefold():
                 total_matches_found += 1
                 if truncated:
                     continue
@@ -182,7 +192,7 @@ def search_error_patterns(filename: str, keyword: str) -> str:
                 matches.append(formatted_line)
                 payload_chars += len(formatted_line) + 1 # +1 for newline
     except Exception as e:
-        logger.error("search_error_patterns: Error searching file '%s': %s", filename, e)
+        logger.error("tool=search_error_patterns status=error error_type=read_failed filename='%s' details='%s'", filename, e)
         raise
     finally:
         if file_obj:
@@ -194,18 +204,18 @@ def search_error_patterns(filename: str, keyword: str) -> str:
                 pass
 
     if not matches:
-        logger.info("search_error_patterns: Finished search. No matches found.")
+        logger.info("tool=search_error_patterns status=success matches=0 keyword='%s' filename='%s'", clean_keyword, filename)
         return f"No matches found for keyword '{clean_keyword}' in '{filename}'."
 
     result_text = "\n".join(matches)
     if truncated:
         logger.warning(
-            "search_error_patterns: Search results truncated. Found %d matches, returned %d.",
+            "tool=search_error_patterns status=success_truncated total_matches=%d returned_matches=%d",
             total_matches_found, len(matches)
         )
         result_text += f"\n\n[WARNING: Results truncated. Showing first {len(matches)} of {total_matches_found} total matches found.]"
     else:
-        logger.info("search_error_patterns: Finished search. Found %d matches.", len(matches))
+        logger.info("tool=search_error_patterns status=success total_matches=%d", len(matches))
         
     return result_text
 
