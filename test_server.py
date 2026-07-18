@@ -333,5 +333,91 @@ class TestSecureLogAnalyzer(unittest.TestCase):
             self.assertNotIn("Match 2", results)
             self.assertIn("[WARNING: Results truncated. Showing first 1 of 2 total matches found.]", results)
 
+    def test_invalid_input_cannot_inject_log_line(self):
+        with self.assertRaises(ValueError):
+            search_error_patterns("auth.log", "ERROR\n2026-07-18 - secure_log_analyzer - INFO - status=success")
+
+    def test_single_oversized_line_is_truncated(self):
+        new_config = dataclasses.replace(server.Config, MAX_LINE_CHARS=10)
+        with mock.patch('server.Config', new_config):
+            log_content = "[ERROR] A very long line that exceeds the ten character limit"
+            log_file = self.base_path / "long.log"
+            log_file.write_text(log_content, encoding="utf-8")
+            
+            results = search_error_patterns("long.log", "ERROR")
+            self.assertIn("[ERROR] A … [LINE TRUNCATED]", results)
+
+    def test_size_validation_uses_open_file_descriptor(self):
+        log_file = self.base_path / "fstat.log"
+        log_file.write_text("Small file", encoding="utf-8")
+        
+        original_fstat = os.fstat
+        def mock_fstat(fd):
+            res = original_fstat(fd)
+            mock_stat = mock.MagicMock()
+            mock_stat.st_mode = res.st_mode
+            mock_stat.st_size = server.Config.MAX_FILE_SIZE_BYTES + 1000
+            return mock_stat
+
+        with mock.patch('os.fstat', side_effect=mock_fstat):
+            with self.assertRaises(ValueError) as context:
+                view_log_summary("fstat.log")
+            self.assertIn("Failed to open or validate the log file.", str(context.exception))
+
+    def test_non_regular_file_is_rejected(self):
+        log_file = self.base_path / "nonreg.log"
+        log_file.write_text("Hello", encoding="utf-8")
+        
+        original_fstat = os.fstat
+        def mock_fstat(fd):
+            res = original_fstat(fd)
+            mock_stat = mock.MagicMock()
+            mock_stat.st_mode = 0  # 0 means not a regular file (e.g. FIFO/socket)
+            mock_stat.st_size = res.st_size
+            return mock_stat
+
+        with mock.patch('os.fstat', side_effect=mock_fstat):
+            with self.assertRaises(ValueError) as context:
+                view_log_summary("nonreg.log")
+            self.assertEqual(str(context.exception), "Failed to open or validate the log file.")
+
+    def test_empty_file_summary(self):
+        log_file = self.base_path / "empty.log"
+        log_file.touch()
+        
+        summary = view_log_summary("empty.log")
+        self.assertEqual(summary["size_bytes"], 0)
+        self.assertEqual(summary["line_count"], 0)
+        self.assertEqual(summary["preview"], "")
+        self.assertFalse(summary["preview_truncated"])
+
+    def test_case_insensitive_search(self):
+        log_file = self.base_path / "case.log"
+        log_file.write_text("[Error] Mixed Case\n[ERROR] UPPERCASE\n[error] lowercase\n", encoding="utf-8")
+        
+        # Searching for "error" should match all three
+        results = search_error_patterns("case.log", "eRrOr")
+        self.assertIn("Mixed Case", results)
+        self.assertIn("UPPERCASE", results)
+        self.assertIn("lowercase", results)
+
+    def test_no_match_response_does_not_leak_unsafe_input(self):
+        log_file = self.base_path / "nomatch.log"
+        log_file.write_text("Safe line\n", encoding="utf-8")
+        
+        keyword = "NO_MATCH_AT_ALL"
+        results = search_error_patterns("nomatch.log", keyword)
+        self.assertEqual(results, f"No matches found for keyword '{keyword}' in 'nomatch.log'.")
+        
+    def test_preview_explicitly_indicates_truncation(self):
+        new_config = dataclasses.replace(server.Config, MAX_PREVIEW_LINES=2)
+        with mock.patch('server.Config', new_config):
+            log_file = self.base_path / "preview.log"
+            log_file.write_text("Line 1\nLine 2\nLine 3\n", encoding="utf-8")
+            
+            summary = view_log_summary("preview.log")
+            self.assertEqual(summary["line_count"], 3)
+            self.assertTrue(summary["preview_truncated"])
+
 if __name__ == "__main__":
     unittest.main()
