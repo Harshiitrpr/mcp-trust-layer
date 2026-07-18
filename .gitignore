@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments (Standard Python environments)
+.venv/
+venv/
+ENV/
+env/
+
+# IDE Settings & Tool Caches
+.vscode/
+.idea/
+.cline/
+.cursor/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Local environment/sensitive files (just in case)
+.env
+*.local
+
+# Initial Objectives
+requirements.md
