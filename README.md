@@ -1,6 +1,6 @@
 # Secure File & Log Analyzer MCP Server
 
-A production-grade, highly secure Model Context Protocol (MCP) server built with Python and FastMCP. This server exposes a curated catalog of log analysis tools to AI agents while implementing strict input validation, OS-level symlink/TOCTOU mitigation, streaming resource protection, and dynamic response redaction.
+A production-grade, security-hardened Model Context Protocol (MCP) server built with Python and FastMCP. This server exposes a curated catalog of log analysis tools to AI agents while implementing strict input validation, OS-level symlink/TOCTOU mitigation, streaming resource protection, and dynamic response redaction.
 
 ---
 
@@ -41,7 +41,7 @@ The server is configured using environment variables. If not provided, secure de
 | `LOG_ANALYZER_MAX_FILE_SIZE` | Maximum file size (in bytes) that the server is allowed to process. | `52428800` (50 MB) |
 | `LOG_ANALYZER_MAX_PREVIEW_LINES` | Number of lines returned in the log preview. | `10` |
 | `LOG_ANALYZER_MAX_SEARCH_RESULTS` | Maximum number of matching lines returned in a search. | `500` |
-| `LOG_ANALYZER_MAX_SEARCH_CHARS` | Maximum character length of the search result response payload. | `100000` (100 KB) |
+| `LOG_ANALYZER_MAX_SEARCH_CHARS` | Maximum character length of the search result response payload. | `100000` (100,000 characters) |
 
 ---
 
@@ -87,12 +87,12 @@ To add this server to Claude Desktop, edit your `claude_desktop_config.json` (lo
 {
   "mcpServers": {
     "secure-log-analyzer": {
-      "command": "C:\\Users\\harsh\\Desktop\\projects\\MCP\\.venv\\Scripts\\python.exe",
+      "command": "C:\\absolute\\path\\to\\.venv\\Scripts\\python.exe",
       "args": [
-        "C:\\Users\\harsh\\Desktop\\projects\\MCP\\server.py"
+        "C:\\absolute\\path\\to\\mcp-trust-layer\\server.py"
       ],
       "env": {
-        "LOG_ANALYZER_BASE_DIR": "C:\\Users\\harsh\\Desktop\\projects\\MCP\\mock_logs",
+        "LOG_ANALYZER_BASE_DIR": "C:\\absolute\\path\\to\\mcp-trust-layer\\mock_logs",
         "LOG_ANALYZER_MAX_FILE_SIZE": "52428800"
       }
     }
@@ -108,7 +108,7 @@ To add this server to Claude Desktop, edit your `claude_desktop_config.json` (lo
 You can run and inspect the server using the MCP Inspector tool:
 
 ```bash
-npx -y @modelcontextprotocol/inspector C:\Users\harsh\Desktop\projects\MCP\.venv\Scripts\python.exe C:\Users\harsh\Desktop\projects\MCP\server.py
+npx -y @modelcontextprotocol/inspector C:\absolute\path\to\.venv\Scripts\python.exe C:\absolute\path\to\mcp-trust-layer\server.py
 ```
 
 Open the URL output in your terminal to interactively call the tools and test validations.

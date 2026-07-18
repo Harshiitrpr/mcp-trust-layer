@@ -7,9 +7,9 @@ This document details the development approach and security trade-offs considere
 Developing a security-sensitive application requires close collaboration with AI agents to ensure code correctness and robust edge-case coverage:
 
 1. **Collaborative Pattern Engineering**: 
-   - We engineered highly optimized regex patterns to redact credentials in logs without introducing false positives or performance bottlenecks (ReDoS).
+   - We iteratively designed bounded regex patterns for common credential formats and validated them against synthetic positive and negative cases.
    - We designed a unified scanner for key-value configurations, iterating to match arbitrary alphanumeric and hyphenated/underscored prefixes (e.g., `auth_token`, `session_secret`) instead of just literal word boundaries.
-   - AI drafted mock logs (`api.log`, `auth.log`, `system.log`) with synthetic credentials to validate the redaction pipeline.
+   - AI assistance was used to challenge the initial threat model, generate adversarial test cases, and propose candidate redaction patterns. Each suggestion was manually reviewed and validated through tests.
 
 2. **Iterative Security Hardening**: 
    - **Symlink TOCTOU Mitigation**: We recognized that `Path.is_symlink()` creates a Time-of-Check to Time-of-Use (TOCTOU) race condition. We addressed this by integrating native kernel-level protections (e.g., `os.O_NOFOLLOW` on Unix). 
