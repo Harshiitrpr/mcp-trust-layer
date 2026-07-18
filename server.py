@@ -7,7 +7,7 @@ from typing import TypedDict
 from config import Config
 from security import (
     get_secure_path,
-    open_file_safely,
+    open_validated_log_file,
     redact_sensitive_data,
     sanitize_keyword
 )
@@ -35,12 +35,12 @@ def list_log_files() -> list[str]:
     logger.info("tool=list_log_files status=invoked BASE_DIR='%s'", Config.BASE_DIR)
     
     if not Config.BASE_DIR.exists():
-        logger.error("tool=list_log_files status=error error_type=missing_dir directory='%s'", Config.BASE_DIR)
-        raise FileNotFoundError(f"Safe log directory '{Config.BASE_DIR}' does not exist.")
+        logger.error("tool=list_log_files status=error error_type=missing_dir directory=%r", str(Config.BASE_DIR))
+        raise RuntimeError("The configured log directory is unavailable.")
     
     if not Config.BASE_DIR.is_dir():
-        logger.error("tool=list_log_files status=error error_type=not_a_directory directory='%s'", Config.BASE_DIR)
-        raise ValueError(f"Safe log directory '{Config.BASE_DIR}' is not a directory.")
+        logger.error("tool=list_log_files status=error error_type=not_a_directory directory=%r", str(Config.BASE_DIR))
+        raise RuntimeError("The configured log directory is unavailable.")
 
     try:
         files = []
@@ -56,14 +56,15 @@ def list_log_files() -> list[str]:
         logger.info("tool=list_log_files status=success count=%d", len(sorted_files))
         return sorted_files
     except OSError as e:
-        logger.error("tool=list_log_files status=error error_type=os_error details='%s'", e)
-        raise ValueError(f"Error accessing safe log directory: {e.strerror}") from e
+        logger.error("tool=list_log_files status=error error_type=os_error details=%r", e)
+        raise RuntimeError("Error accessing safe log directory.") from e
 
 class LogSummary(TypedDict):
     filename: str
     size_bytes: int
     line_count: int
     preview: str
+    preview_truncated: bool
 
 @mcp.tool()
 def view_log_summary(filename: str) -> LogSummary:
@@ -71,32 +72,27 @@ def view_log_summary(filename: str) -> LogSummary:
     Reads a requested log file and returns its size, line count, and a brief preview.
     Protects against Path Traversal, TOCTOU, and out-of-memory DoS.
     """
-    logger.info("tool=view_log_summary status=invoked filename='%s'", filename)
-    
     # 1. Path & Symlink validation
     try:
         secure_path = get_secure_path(filename, Config.BASE_DIR)
     except ValueError as val_err:
-        logger.warning("tool=view_log_summary status=error error_type=validation_failed filename='%s' details='%s'", filename, val_err)
-        raise
+        logger.warning("tool=view_log_summary status=error error_type=validation_failed filename=%r details=%r", filename, val_err)
+        raise ValueError("The provided filename is invalid.")
         
-    # 2. Size Check
-    size_bytes = os.path.getsize(secure_path)
-    if size_bytes > Config.MAX_FILE_SIZE_BYTES:
-        logger.warning(
-            "tool=view_log_summary status=error error_type=file_too_large filename='%s' size_bytes=%d max_size_bytes=%d",
-            filename, size_bytes, Config.MAX_FILE_SIZE_BYTES
-        )
-        raise ValueError(
-            f"Security Exception: Log file size ({size_bytes} bytes) "
-            f"exceeds maximum allowed limit of {Config.MAX_FILE_SIZE_BYTES} bytes."
-        )
-
-    # 3. Secure File Open and Streaming (to protect memory / count lines)
+    logger.info("tool=view_log_summary status=invoked filename=%r", filename)
+    
+    # 2. Secure File Open and Size Check (to prevent TOCTOU)
+    try:
+        fd, size_bytes = open_validated_log_file(secure_path, Config.MAX_FILE_SIZE_BYTES)
+    except Exception as e:
+        logger.warning("tool=view_log_summary status=error error_type=open_failed filename=%r details=%r", filename, e)
+        raise ValueError("Failed to open or validate the log file.")
+        
+    # 3. Secure Streaming (to protect memory / count lines)
     line_count = 0
     preview_lines = []
+    preview_truncated = False
     
-    fd = open_file_safely(secure_path)
     file_obj = None
     try:
         # errors='replace' prevents decoding failures from crashing the tool
@@ -104,10 +100,17 @@ def view_log_summary(filename: str) -> LogSummary:
         for line in file_obj:
             line_count += 1
             if len(preview_lines) < Config.MAX_PREVIEW_LINES:
+                # Truncate extremely long lines before regex to avoid memory/ReDoS issues
+                clean_line = line.rstrip("\r\n")
+                if len(clean_line) > Config.MAX_LINE_CHARS:
+                    clean_line = clean_line[:Config.MAX_LINE_CHARS] + "… [LINE TRUNCATED]"
+                
                 # Apply dynamic redaction line-by-line to prevent leakage
-                preview_lines.append(redact_sensitive_data(line.rstrip("\r\n")))
+                preview_lines.append(redact_sensitive_data(clean_line))
+            elif not preview_truncated:
+                preview_truncated = True
     except Exception as e:
-        logger.error("tool=view_log_summary status=error error_type=read_failed filename='%s' details='%s'", filename, e)
+        logger.error("tool=view_log_summary status=error error_type=read_failed filename=%r details=%r", filename, e)
         raise
     finally:
         if file_obj:
@@ -119,7 +122,7 @@ def view_log_summary(filename: str) -> LogSummary:
                 pass
 
     logger.info(
-        "tool=view_log_summary status=success filename='%s' size_bytes=%d line_count=%d",
+        "tool=view_log_summary status=success filename=%r size_bytes=%d line_count=%d",
         filename, size_bytes, line_count
     )
     
@@ -127,7 +130,8 @@ def view_log_summary(filename: str) -> LogSummary:
         "filename": filename,
         "size_bytes": size_bytes,
         "line_count": line_count,
-        "preview": "\n".join(preview_lines)
+        "preview": "\n".join(preview_lines),
+        "preview_truncated": preview_truncated
     }
 
 @mcp.tool()
@@ -136,27 +140,22 @@ def search_error_patterns(filename: str, keyword: str) -> str:
     Searches a given log file for specific keywords, with shell sanitization and output truncation.
     Search is literal and case-insensitive.
     """
-    logger.info("tool=search_error_patterns status=invoked filename='%s' keyword='%s'", filename, keyword)
-    
     # 1. Input & Payload Sanitization
     try:
         clean_keyword = sanitize_keyword(keyword)
         secure_path = get_secure_path(filename, Config.BASE_DIR)
     except ValueError as val_err:
-        logger.warning("tool=search_error_patterns status=error error_type=validation_failed details='%s'", val_err)
-        raise
+        logger.warning("tool=search_error_patterns status=error error_type=validation_failed details=%r", val_err)
+        raise ValueError("Invalid filename or search keyword provided.")
 
-    # 2. Size Check
-    size_bytes = os.path.getsize(secure_path)
-    if size_bytes > Config.MAX_FILE_SIZE_BYTES:
-        logger.warning(
-            "tool=search_error_patterns status=error error_type=file_too_large filename='%s' size_bytes=%d",
-            filename, size_bytes
-        )
-        raise ValueError(
-            f"Security Exception: Log file size ({size_bytes} bytes) "
-            f"exceeds maximum allowed limit of {Config.MAX_FILE_SIZE_BYTES} bytes."
-        )
+    logger.info("tool=search_error_patterns status=invoked filename=%r keyword=%r", filename, clean_keyword)
+
+    # 2. Secure File Open and Size Check
+    try:
+        fd, size_bytes = open_validated_log_file(secure_path, Config.MAX_FILE_SIZE_BYTES)
+    except Exception as e:
+        logger.warning("tool=search_error_patterns status=error error_type=open_failed filename=%r details=%r", filename, e)
+        raise ValueError("Failed to open or validate the log file.")
 
     # 3. Stream and search
     matches = []
@@ -166,7 +165,6 @@ def search_error_patterns(filename: str, keyword: str) -> str:
     
     search_term = clean_keyword.casefold()
 
-    fd = open_file_safely(secure_path)
     file_obj = None
     try:
         file_obj = open(fd, "r", encoding="utf-8", errors="replace")
@@ -176,8 +174,13 @@ def search_error_patterns(filename: str, keyword: str) -> str:
                 if truncated:
                     continue
                 
+                # Truncate line length
+                clean_line = line.rstrip("\r\n")
+                if len(clean_line) > Config.MAX_LINE_CHARS:
+                    clean_line = clean_line[:Config.MAX_LINE_CHARS] + "… [LINE TRUNCATED]"
+                
                 # Apply dynamic redaction line-by-line to prevent leakage of credentials
-                redacted_line = redact_sensitive_data(line.rstrip("\r\n"))
+                redacted_line = redact_sensitive_data(clean_line)
                 formatted_line = f"Line {line_num}: {redacted_line}"
                 
                 # Check limits before adding to matches list
@@ -192,7 +195,7 @@ def search_error_patterns(filename: str, keyword: str) -> str:
                 matches.append(formatted_line)
                 payload_chars += len(formatted_line) + 1 # +1 for newline
     except Exception as e:
-        logger.error("tool=search_error_patterns status=error error_type=read_failed filename='%s' details='%s'", filename, e)
+        logger.error("tool=search_error_patterns status=error error_type=read_failed filename=%r details=%r", filename, e)
         raise
     finally:
         if file_obj:
@@ -204,7 +207,7 @@ def search_error_patterns(filename: str, keyword: str) -> str:
                 pass
 
     if not matches:
-        logger.info("tool=search_error_patterns status=success matches=0 keyword='%s' filename='%s'", clean_keyword, filename)
+        logger.info("tool=search_error_patterns status=success matches=0 keyword=%r filename=%r", clean_keyword, filename)
         return f"No matches found for keyword '{clean_keyword}' in '{filename}'."
 
     result_text = "\n".join(matches)

@@ -143,10 +143,8 @@ def open_file_safely(filepath: Path) -> int:
             stat_after = os.fstat(fd)
             # Verify file type didn't swap during the open operation
             if stat.S_ISDIR(stat_after.st_mode):
-                os.close(fd)
                 raise ValueError(f"Target path is a directory: {filepath.name}")
             if stat.S_ISLNK(stat_after.st_mode):
-                os.close(fd)
                 raise ValueError("Security Exception: Symlink detected.")
 
             # Check for Windows reparse points (symlinks, mount points, or directory junctions)
@@ -154,13 +152,36 @@ def open_file_safely(filepath: Path) -> int:
                 handle = msvcrt.get_osfhandle(fd)
                 file_info = win32file.GetFileInformationByHandle(handle)
                 if file_info[0] & win32con.FILE_ATTRIBUTE_REPARSE_POINT:
-                    os.close(fd)
                     raise ValueError("Security Exception: Symlink or reparse point detected.")
         except Exception:
             os.close(fd)
             raise
 
         return fd
+
+def open_validated_log_file(filepath: Path, max_size: int) -> tuple[int, int]:
+    """
+    Opens the file safely and verifies size/type on the file descriptor to prevent TOCTOU.
+    Returns a tuple of (file_descriptor, file_size_in_bytes).
+    """
+    fd = open_file_safely(filepath)
+
+    try:
+        file_stat = os.fstat(fd)
+
+        if not stat.S_ISREG(file_stat.st_mode):
+            raise ValueError("Security Exception: Target is not a regular file.")
+
+        if file_stat.st_size > max_size:
+            raise ValueError(
+                f"Security Exception: Log file size ({file_stat.st_size} bytes) "
+                f"exceeds maximum allowed limit of {max_size} bytes."
+            )
+
+        return fd, file_stat.st_size
+    except Exception:
+        os.close(fd)
+        raise
 
 def credential_redact_callback(match: Match) -> str:
     """

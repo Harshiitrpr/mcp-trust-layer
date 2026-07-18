@@ -19,6 +19,9 @@ class AppConfig:
     # Maximum lines of preview returned by the view_log_summary tool (default: 10 lines)
     MAX_PREVIEW_LINES: int = field(default_factory=lambda: int(os.environ.get("LOG_ANALYZER_MAX_PREVIEW_LINES", 10)))
 
+    # Maximum character limit for a single line (default: 16KB) to prevent ReDoS or memory exhaustion on maliciously long lines
+    MAX_LINE_CHARS: int = field(default_factory=lambda: int(os.environ.get("LOG_ANALYZER_MAX_LINE_CHARS", 16_384)))
+
     # Maximum search results (lines) to return (default: 500 lines)
     MAX_SEARCH_RESULTS: int = field(default_factory=lambda: int(os.environ.get("LOG_ANALYZER_MAX_SEARCH_RESULTS", 500)))
 
@@ -32,6 +35,8 @@ class AppConfig:
             raise ValueError("LOG_ANALYZER_MAX_FILE_SIZE must be positive")
         if self.MAX_PREVIEW_LINES <= 0:
             raise ValueError("LOG_ANALYZER_MAX_PREVIEW_LINES must be positive")
+        if self.MAX_LINE_CHARS <= 0:
+            raise ValueError("LOG_ANALYZER_MAX_LINE_CHARS must be positive")
         if self.MAX_SEARCH_RESULTS <= 0:
             raise ValueError("LOG_ANALYZER_MAX_SEARCH_RESULTS must be positive")
         if self.MAX_SEARCH_PAYLOAD_CHARS <= 0:
