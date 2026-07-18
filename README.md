@@ -17,17 +17,17 @@ A production-grade, highly secure Model Context Protocol (MCP) server built with
 
 ---
 
-## 🔒 Security Posture & Threat Model Mitigations
+## 🔒 Security Posture & Threat Model
 
-This codebase is designed using **defense-in-depth** principles to ensure that AI agents cannot exploit the exposed tools to compromise the host system.
+This codebase relies on **defense-in-depth**. For a complete analysis of assets and attackers, see [THREAT_MODEL.md](THREAT_MODEL.md).
 
-| Threat / Attack Vector | Risk | Mitigation Strategy | Implementation Details |
-| :--- | :--- | :--- | :--- |
-| **Path Traversal** | High | Prevents accessing system files (e.g., `/etc/passwd`) via `../` or absolute paths. | 1. Input sanitization rejects `..` and backslashes.<br>2. Restricts filenames to `^[a-zA-Z0-9_\-\./]+$`.<br>3. Enforces bounds checking with `Path.is_relative_to()`. |
-| **Symlink / TOCTOU Swapping** | High | Prevents race conditions where a safe file is replaced with a symlink to a sensitive file between check and read. | 1. Opens files natively using `os.O_NOFOLLOW` on Unix.<br>2. On Windows, opens the file descriptor first, checks `os.fstat`, and verifies the file handle is not a reparse point using `win32file` APIs before reading. |
-| **Shell Injection** | High | Prevents agents from executing chained OS commands (e.g., passing `file.log; rm -rf /`). | 1. The server reads files natively in Python (no subprocesses or shell calls).<br>2. String payloads (keywords/filenames) are sanitised against command chaining characters: `;`, `&`, `\|`, `$`, `(`, `)`, `` ` ``, `<`, `>`, `!`, `\n`, `\r`, `\t`. |
-| **Credential / Data Leakage** | Medium | Prevents hardcoded API keys, JWTs, AWS credentials, or inline passwords from being returned to the LLM. | 1. Real-time, line-by-line redaction engine using compiled regex scanners.<br>2. Redacts Google API keys, JWTs, AWS Access Key IDs, Bearer tokens, and key-value credentials (e.g., `password=...`, `token: ...`). |
-| **Denial of Service (DoS)** | Medium | Prevents memory exhaustion or LLM client crashes when attempting to read large files or returning millions of matches. | 1. File streaming pipeline reads files in small chunks/line-by-line (never loading entire files into memory).<br>2. Rejects files exceeding `MAX_FILE_SIZE_BYTES` (default: 50MB).<br>3. Truncates tool outputs at `MAX_SEARCH_RESULTS` (default: 500 lines) or `MAX_SEARCH_PAYLOAD_CHARS` (default: 100KB) and appends a warning. |
+| Threat / Attack Vector | Mitigation Strategy | Implementation Details |
+| :--- | :--- | :--- |
+| **Path Traversal** | Blocks access to system files (`/etc/passwd`). | 1. Input allowlist (`^[a-zA-Z0-9_\-\./]+$`).<br>2. Resolves path and verifies `Path.is_relative_to()`. |
+| **Symlink / TOCTOU** | Prevents race condition swapping. | 1. Opens files using `os.O_NOFOLLOW` on Unix.<br>2. On Windows, handle-based validation. |
+| **Shell Injection** | Blocks OS command chaining. | 1. Reads files natively in Python.<br>2. Sanitizes keywords against shell metacharacters. |
+| **Data Leakage** | Prevents token exfiltration. | 1. Real-time regex redaction engine.<br>2. Masks API keys, JWTs, and AWS credentials. |
+| **Resource Exhaustion** | Prevents DoS and OOM crashes. | 1. Line-by-line file streaming.<br>2. Configuration limits on file size and search payload. |
 
 ---
 
