@@ -50,7 +50,7 @@ The server is configured using environment variables. If not provided, secure de
 ### Prerequisites
 
 - Python 3.10 or higher.
-- A virtual environment is highly recommended.
+- On some systems, use `python3` and `pip3` instead of `python` and `pip`.
 
 ### Installation
 
