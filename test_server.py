@@ -419,5 +419,30 @@ class TestSecureLogAnalyzer(unittest.TestCase):
             self.assertEqual(summary["line_count"], 3)
             self.assertTrue(summary["preview_truncated"])
 
+    # ==========================================
+    # 7. End-to-End Security Rejection Tests
+    # ==========================================
+    def test_view_log_summary_rejects_path_traversal(self):
+        """Evaluator scenario: trying to read files outside the safe directory."""
+        malicious_filenames = ["../server.py", "..\\server.py", "../../etc/passwd"]
+        for name in malicious_filenames:
+            with self.assertRaises(ValueError, msg=f"Failed to reject traversal via view_log_summary: {name}"):
+                view_log_summary(name)
+
+    def test_search_error_patterns_rejects_path_traversal(self):
+        """Evaluator scenario: trying to search files outside the safe directory."""
+        with self.assertRaises(ValueError):
+            search_error_patterns("../../etc/shadow", "ERROR")
+
+    def test_search_error_patterns_rejects_shell_injection(self):
+        """Evaluator scenario: trying to inject shell commands via keyword."""
+        log_file = self.base_path / "safe.log"
+        log_file.write_text("[ERROR] test\n", encoding="utf-8")
+        
+        payloads = ["ERROR; cat /etc/passwd", "ERROR && whoami", "ERROR | nc -l 4444"]
+        for payload in payloads:
+            with self.assertRaises(ValueError, msg=f"Failed to reject shell injection: {payload}"):
+                search_error_patterns("safe.log", payload)
+
 if __name__ == "__main__":
     unittest.main()
