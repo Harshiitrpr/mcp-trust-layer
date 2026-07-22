@@ -11,9 +11,17 @@ Developing a security-sensitive application requires close collaboration with AI
    - We designed a unified scanner for key-value configurations, iterating to match arbitrary alphanumeric and hyphenated/underscored prefixes (e.g., `auth_token`, `session_secret`) instead of just literal word boundaries.
    - AI assistance was used to challenge the initial threat model, generate adversarial test cases, and propose candidate redaction patterns. Each suggestion was manually reviewed and validated through tests.
 
-2. **Iterative Security Hardening**: 
+2. **Mock Data Schema Design**:
+   - AI was used to generate realistic, multi-service mock log files that mirror production infrastructure patterns (API gateways, auth services, system daemons).
+   - Each mock log was deliberately designed to embed a mix of credential types (Google API keys, JWTs, AWS access keys, Bearer tokens, inline passwords) within `ERROR` and `CRITICAL` log lines, so that the search tool naturally triggers redaction — creating a clear, demonstrable test surface.
+   - The format (timestamps, service tags, severity levels, structured key-value payloads) was chosen to be representative of real-world log output, making the server's behavior testable against plausible data.
+
+3. **Iterative Security Hardening**: 
    - **Symlink TOCTOU Mitigation**: We recognized that `Path.is_symlink()` creates a Time-of-Check to Time-of-Use (TOCTOU) race condition. We addressed this by integrating native kernel-level protections (e.g., `os.O_NOFOLLOW` on Unix). 
    - *Note on Windows support*: While Python standard library guarantees for TOCTOU are weaker on Windows, our implementation attempts handle-level validation. However, production deployments should ultimately combine this application validation with proper container sandboxing.
+
+4. **Security Trade-off Analysis**:
+   - AI was used as a sounding board to evaluate the trade-offs between application-level path validation versus OS-level sandboxing, informing the defense-in-depth architecture documented below.
 
 ## ⚖️ Security Trade-offs: Code Validation vs. OS Sandboxing
 
