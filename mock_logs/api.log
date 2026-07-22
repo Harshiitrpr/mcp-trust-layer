@@ -1,3 +1,19 @@
-2026-07-18 10:00:00 INFO User login successful
-2026-07-18 10:05:00 ERROR Connection timed out
-2026-07-18 10:10:00 CRITICAL Database cluster unavailable in us-east-1
+2026-07-18 08:00:01 INFO  [api-gateway] Server started on port 8443, TLS enabled
+2026-07-18 08:00:02 INFO  [api-gateway] Loading route table from /etc/api/routes.yaml
+2026-07-18 08:00:03 INFO  [api-gateway] Health check endpoint registered at /healthz
+2026-07-18 08:01:15 INFO  [api-gateway] GET /v1/users 200 12ms caller=dashboard-ui
+2026-07-18 08:02:44 INFO  [api-gateway] POST /v1/orders 201 45ms caller=mobile-app
+2026-07-18 08:03:10 ERROR [api-gateway] POST /v1/payments 502 — upstream timeout after 30000ms, retry_token=AIzaSyB_9xQ2mR4kL7vN3wP5jT8hY1bC6dF0eGx
+2026-07-18 08:03:11 WARN  [api-gateway] Circuit breaker OPEN for service=payments-svc, failures=5/5
+2026-07-18 08:04:22 ERROR [api-gateway] GET /v1/inventory 401 — invalid bearer token in Authorization header: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzcnYtYWNjb3VudCIsInNjb3BlIjoicmVhZCJ9.dG9rZW5zaWduYXR1cmU
+2026-07-18 08:05:00 INFO  [api-gateway] GET /healthz 200 1ms caller=k8s-probe
+2026-07-18 08:06:33 ERROR [api-gateway] POST /v1/notifications 500 — unhandled exception in downstream, api_key=AIzaSyC_Xw2Yp3Qr4St5Uv6Wx7Yz8Ab9Cd0Ef1G used by caller=email-svc
+2026-07-18 08:07:45 INFO  [api-gateway] Rate limit applied: client=mobile-app, quota=1000/min, current=987
+2026-07-18 08:08:12 WARN  [api-gateway] Slow response: GET /v1/reports 200 4200ms caller=analytics-cron
+2026-07-18 08:10:00 CRITICAL [api-gateway] TLS certificate for *.internal.jetstream.io expires in 48 hours — renewal secret: tls_private_key=MIIEvQIBADANBgkqhki
+2026-07-18 08:10:01 ERROR [api-gateway] Failed to rotate credentials: aws_access_key=AKIAIOSFODNN7EXAMPLE, region=us-east-1
+2026-07-18 08:12:30 INFO  [api-gateway] POST /v1/users 201 22ms caller=onboarding-svc
+2026-07-18 08:15:00 INFO  [api-gateway] GET /healthz 200 1ms caller=k8s-probe
+2026-07-18 08:17:44 ERROR [api-gateway] GET /v1/analytics 403 — insufficient scope, token was: Bearer sk-proj-abc123def456ghi789
+2026-07-18 08:20:00 INFO  [api-gateway] Graceful shutdown initiated, draining 12 active connections
+2026-07-18 08:20:05 INFO  [api-gateway] All connections drained. Server stopped cleanly.

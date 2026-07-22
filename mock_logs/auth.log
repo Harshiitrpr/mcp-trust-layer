@@ -1,4 +1,19 @@
-Auth service started.
-Failed password for admin from 192.168.1.100 port 22 ssh2
-Service token generated: AIzaSyB_1234567890ABCDEFGHIJKLMNOPQRSTU
-Authentication successful for user ID 1044
+2026-07-18 09:00:00 INFO  [auth-svc] Authentication service v2.4.1 started
+2026-07-18 09:00:01 INFO  [auth-svc] Connected to identity provider: idp.internal.jetstream.io
+2026-07-18 09:01:12 INFO  [auth-svc] Login successful: user=hkumar@jetstream.io method=SSO ip=10.0.1.42
+2026-07-18 09:02:45 ERROR [auth-svc] Login failed: user=admin@jetstream.io reason=invalid_password ip=203.0.113.50 attempt=1/5
+2026-07-18 09:02:47 ERROR [auth-svc] Login failed: user=admin@jetstream.io reason=invalid_password ip=203.0.113.50 attempt=2/5
+2026-07-18 09:02:49 ERROR [auth-svc] Login failed: user=admin@jetstream.io reason=invalid_password ip=203.0.113.50 attempt=3/5
+2026-07-18 09:02:51 ERROR [auth-svc] Login failed: user=admin@jetstream.io reason=invalid_password ip=203.0.113.50 attempt=4/5
+2026-07-18 09:02:53 ERROR [auth-svc] Login failed: user=admin@jetstream.io reason=invalid_password ip=203.0.113.50 attempt=5/5
+2026-07-18 09:02:54 CRITICAL [auth-svc] Account locked: user=admin@jetstream.io — 5 consecutive failures from ip=203.0.113.50, geo=CN
+2026-07-18 09:03:00 WARN  [auth-svc] Brute-force pattern detected: 5 failed logins in 8s from ip=203.0.113.50
+2026-07-18 09:05:30 INFO  [auth-svc] Login successful: user=rjones@jetstream.io method=MFA ip=10.0.1.88
+2026-07-18 09:10:15 ERROR [auth-svc] Token validation failed: expired JWT presented — token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiZXhwIjoxNjAwMDAwMDAwfQ.expiredsignaturevalue
+2026-07-18 09:12:00 INFO  [auth-svc] Service account token generated for svc=gcp-connector, api_key=AIzaSyB_1234567890ABCDEFGHIJKLMNOPQRSTU
+2026-07-18 09:14:22 ERROR [auth-svc] OAuth callback failed: state mismatch, session_secret=prod_oauth_session_xK9mW2pL4q
+2026-07-18 09:15:00 INFO  [auth-svc] Password reset initiated: user=admin@jetstream.io ip=10.0.1.1
+2026-07-18 09:18:33 WARN  [auth-svc] Deprecated auth endpoint /v1/login called by client=legacy-dashboard
+2026-07-18 09:20:00 INFO  [auth-svc] Login successful: user=admin@jetstream.io method=password_reset ip=10.0.1.1
+2026-07-18 09:25:10 CRITICAL [auth-svc] IdP connection lost: idp.internal.jetstream.io unreachable, failover to idp-backup, auth_token=fallback_svc_token_Rm9yY2VGYWxsYmFjaw
+2026-07-18 09:30:00 INFO  [auth-svc] IdP connection restored: idp.internal.jetstream.io healthy

@@ -1,4 +1,25 @@
-System boot sequence initiated.
-Loading kernel modules...
-Mounting filesystems...
-CRITICAL: Disk space below 5% on /var/log
+2026-07-18 06:00:00 INFO  [kernel] Linux 6.1.0-prod #1 SMP x86_64 boot complete
+2026-07-18 06:00:01 INFO  [systemd] Started 47 services in 3.2s
+2026-07-18 06:00:02 INFO  [systemd] Mounted filesystems: /, /var, /var/log, /data
+2026-07-18 06:05:00 INFO  [crond] Scheduled job: log-rotation runs daily at 02:00 UTC
+2026-07-18 06:10:00 INFO  [sshd] Accepted publickey for deploy from 10.0.1.5 port 54312 ssh2
+2026-07-18 06:30:00 WARN  [diskmon] Disk usage on /var/log: 82% — threshold is 80%
+2026-07-18 07:00:00 INFO  [crond] Job completed: log-compression, compressed 14 files, freed 2.1GB
+2026-07-18 07:15:22 ERROR [sshd] Failed password for root from 198.51.100.23 port 44812 ssh2
+2026-07-18 07:15:24 ERROR [sshd] Failed password for root from 198.51.100.23 port 44813 ssh2
+2026-07-18 07:15:26 ERROR [sshd] Failed password for root from 198.51.100.23 port 44814 ssh2
+2026-07-18 07:15:27 WARN  [fail2ban] Banning ip=198.51.100.23 for 3600s after 3 failures
+2026-07-18 08:00:00 INFO  [crond] Job started: backup-to-s3, aws_access_key=AKIAI44QH8DHBEXAMPLE, bucket=jetstream-prod-backups
+2026-07-18 08:02:15 ERROR [backup-agent] S3 upload failed: AccessDenied for bucket=jetstream-prod-backups, used key AKIAI44QH8DHBEXAMPLE
+2026-07-18 08:30:00 WARN  [diskmon] Disk usage on /var/log: 91% — approaching critical threshold of 95%
+2026-07-18 09:00:00 CRITICAL [kernel] Out of memory: Kill process 4821 (java) score 950 — freeing 1.8GB RAM
+2026-07-18 09:00:01 ERROR [systemd] Service payments-worker.service entered failed state, password=db_cluster_admin_P4ssw0rd
+2026-07-18 09:05:00 INFO  [systemd] Restarting payments-worker.service (attempt 1/3)
+2026-07-18 09:05:05 INFO  [systemd] payments-worker.service started successfully
+2026-07-18 09:30:00 CRITICAL [diskmon] Disk usage on /var/log: 96% — CRITICAL threshold exceeded, alerting on-call
+2026-07-18 09:30:01 ERROR [diskmon] Emergency log cleanup triggered, removing files older than 7 days
+2026-07-18 09:35:00 INFO  [diskmon] Disk usage on /var/log: 54% after cleanup
+2026-07-18 10:00:00 INFO  [crond] Job completed: security-scan, no vulnerabilities found
+2026-07-18 10:30:00 INFO  [sshd] Accepted publickey for deploy from 10.0.1.5 port 54390 ssh2
+2026-07-18 11:00:00 INFO  [kernel] CPU thermal throttle: core 3 at 89°C, frequency reduced to 2.4GHz
+2026-07-18 11:30:00 INFO  [systemd] System uptime: 5h 30m, load average: 2.14, 1.87, 1.53
