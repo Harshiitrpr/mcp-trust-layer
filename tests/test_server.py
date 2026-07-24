@@ -5,6 +5,14 @@ import dataclasses
 from unittest import mock
 from pathlib import Path
 
+import sys
+from pathlib import Path
+
+# Inject src directory dynamically into sys.path to enable local test execution
+src_path = str(Path(__file__).resolve().parent.parent / "src")
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
 # Set up test environment variables before importing Config
 os.makedirs("./mock_logs", exist_ok=True)
 os.environ["LOG_ANALYZER_BASE_DIR"] = "./mock_logs"
@@ -13,16 +21,16 @@ os.environ["LOG_ANALYZER_MAX_PREVIEW_LINES"] = "10"
 os.environ["LOG_ANALYZER_MAX_SEARCH_RESULTS"] = "500"
 os.environ["LOG_ANALYZER_MAX_SEARCH_CHARS"] = "100000"
 
-import config
-import server
-from security import (
+from secure_log_analyzer import config
+from secure_log_analyzer import server
+from secure_log_analyzer.security import (
     sanitize_filename,
     sanitize_keyword,
     get_secure_path,
     open_file_safely,
     redact_sensitive_data
 )
-from server import list_log_files, view_log_summary, search_error_patterns
+from secure_log_analyzer.server import list_log_files, view_log_summary, search_error_patterns
 
 class TestSecureLogAnalyzer(unittest.TestCase):
     
@@ -33,7 +41,7 @@ class TestSecureLogAnalyzer(unittest.TestCase):
         
         # Override BASE_DIR in Config for isolated testing using mock.patch
         new_config = dataclasses.replace(server.Config, BASE_DIR=self.base_path)
-        self.config_patcher = mock.patch('server.Config', new_config)
+        self.config_patcher = mock.patch('secure_log_analyzer.server.Config', new_config)
         self.config_patcher.start()
         
     def tearDown(self):
@@ -215,6 +223,12 @@ class TestSecureLogAnalyzer(unittest.TestCase):
         for raw, expected in test_cases:
             self.assertEqual(redact_sensitive_data(raw), expected, f"Failed on raw: {raw}")
 
+    def test_redaction_bearer_with_jwt(self):
+        # A Bearer token that is also a JWT should be redacted as [REDACTED TOKEN] (precedence check)
+        raw = "Headers: Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature, Content-Type: json"
+        expected = "Headers: Authorization: Bearer [REDACTED TOKEN], Content-Type: json"
+        self.assertEqual(redact_sensitive_data(raw), expected)
+
     # ==========================================
     # 6. Tool Functional & Safeguard Tests
     # ==========================================
@@ -231,7 +245,7 @@ class TestSecureLogAnalyzer(unittest.TestCase):
 
     def test_view_log_summary_valid(self):
         new_config = dataclasses.replace(server.Config, MAX_PREVIEW_LINES=3)
-        with mock.patch('server.Config', new_config):
+        with mock.patch('secure_log_analyzer.server.Config', new_config):
             log_content = (
                 "Line 1: Normal system message\n"
                 "Line 2: Service token generated: AIzaSyB_1234567890ABCDEFGHIJKLMNOPQRSTU\n"
@@ -255,7 +269,7 @@ class TestSecureLogAnalyzer(unittest.TestCase):
 
     def test_view_log_summary_size_limit(self):
         new_config = dataclasses.replace(server.Config, MAX_FILE_SIZE_BYTES=5 * 1024)  # 5KB
-        with mock.patch('server.Config', new_config):
+        with mock.patch('secure_log_analyzer.server.Config', new_config):
             log_file = self.base_path / "large.log"
             fd = os.open(log_file, os.O_WRONLY | os.O_CREAT)
             try:
@@ -268,26 +282,26 @@ class TestSecureLogAnalyzer(unittest.TestCase):
 
     def test_search_error_patterns_valid(self):
         log_content = (
-            "Line 1: [INFO] Auth service started\n"
-            "Line 2: [ERROR] Failed password for admin\n"
-            "Line 3: [INFO] Token created: AIzaSyB_1234567890ABCDEFGHIJKLMNOPQRSTU\n"
-            "Line 4: [ERROR] DB connection timed out\n"
-            "Line 5: [INFO] Safe message\n"
+            "[INFO] Auth service started\n"
+            "[ERROR] Failed password for admin\n"
+            "[INFO] Token created: AIzaSyB_1234567890ABCDEFGHIJKLMNOPQRSTU\n"
+            "[ERROR] DB connection timed out\n"
+            "[INFO] Safe message\n"
         )
         log_file = self.base_path / "auth.log"
         log_file.write_text(log_content, encoding="utf-8")
         
         results = search_error_patterns("auth.log", "ERROR")
         expected = (
-            "Line 2: Line 2: [ERROR] Failed password for admin\n"
-            "Line 4: Line 4: [ERROR] DB connection timed out"
+            "Line 2: [ERROR] Failed password for admin\n"
+            "Line 4: [ERROR] DB connection timed out"
         )
         self.assertEqual(results, expected)
 
     def test_search_error_patterns_redaction(self):
         log_content = (
-            "Line 1: [ERROR] Failed token: AIzaSyB_1234567890ABCDEFGHIJKLMNOPQRSTU\n"
-            "Line 2: [ERROR] admin_token = secretpassword\n"
+            "[ERROR] Failed token: AIzaSyB_1234567890ABCDEFGHIJKLMNOPQRSTU\n"
+            "[ERROR] admin_token = secretpassword\n"
         )
         log_file = self.base_path / "auth.log"
         log_file.write_text(log_content, encoding="utf-8")
@@ -300,7 +314,7 @@ class TestSecureLogAnalyzer(unittest.TestCase):
 
     def test_search_error_patterns_truncation_results(self):
         new_config = dataclasses.replace(server.Config, MAX_SEARCH_RESULTS=2)
-        with mock.patch('server.Config', new_config):
+        with mock.patch('secure_log_analyzer.server.Config', new_config):
             log_content = (
                 "[ERROR] Match 1\n"
                 "[ERROR] Match 2\n"
@@ -319,7 +333,7 @@ class TestSecureLogAnalyzer(unittest.TestCase):
 
     def test_search_error_patterns_truncation_chars(self):
         new_config = dataclasses.replace(server.Config, MAX_SEARCH_PAYLOAD_CHARS=50)
-        with mock.patch('server.Config', new_config):
+        with mock.patch('secure_log_analyzer.server.Config', new_config):
             log_content = (
                 "[ERROR] Match 1 with long message\n"
                 "[ERROR] Match 2 with long message\n"
@@ -339,7 +353,7 @@ class TestSecureLogAnalyzer(unittest.TestCase):
 
     def test_single_oversized_line_is_truncated(self):
         new_config = dataclasses.replace(server.Config, MAX_LINE_CHARS=10)
-        with mock.patch('server.Config', new_config):
+        with mock.patch('secure_log_analyzer.server.Config', new_config):
             log_content = "[ERROR] A very long line that exceeds the ten character limit"
             log_file = self.base_path / "long.log"
             log_file.write_text(log_content, encoding="utf-8")
@@ -411,7 +425,7 @@ class TestSecureLogAnalyzer(unittest.TestCase):
         
     def test_preview_explicitly_indicates_truncation(self):
         new_config = dataclasses.replace(server.Config, MAX_PREVIEW_LINES=2)
-        with mock.patch('server.Config', new_config):
+        with mock.patch('secure_log_analyzer.server.Config', new_config):
             log_file = self.base_path / "preview.log"
             log_file.write_text("Line 1\nLine 2\nLine 3\n", encoding="utf-8")
             

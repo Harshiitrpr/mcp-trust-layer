@@ -21,7 +21,7 @@ MAX_KEYWORD_LEN = 100
 # Restricts input to a predictable filename/path character set and rejects
 # shell metacharacters. Absolute-path and directory-containment enforcement
 # are performed separately.
-SAFE_FILENAME_REGEX = re.compile(r'^[a-zA-Z0-9_\-\./]+$')
+SAFE_FILENAME_REGEX = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
 
 # Redaction regular expressions
 GOOGLE_API_KEY_REGEX = re.compile(r'AIza[0-9A-Za-z-_]{35}')
@@ -209,11 +209,11 @@ def redact_sensitive_data(text: str) -> str:
     # Redact AWS Access Key IDs
     text = AWS_ACCESS_KEY_REGEX.sub("[REDACTED AWS KEY]", text)
 
+    # Redact Bearer tokens first (in case they contain JWTs)
+    text = BEARER_REGEX.sub(r"\1[REDACTED TOKEN]", text)
+
     # Redact JWTs
     text = JWT_REGEX.sub("[REDACTED JWT]", text)
-
-    # Redact Bearer tokens
-    text = BEARER_REGEX.sub(r"\1[REDACTED TOKEN]", text)
 
     # Redact key-value credentials (inline passwords/tokens)
     text = CREDENTIAL_REGEX.sub(credential_redact_callback, text)

@@ -4,13 +4,22 @@ import sys
 from fastmcp import FastMCP
 from typing import TypedDict
 
-from config import Config
-from security import (
-    get_secure_path,
-    open_validated_log_file,
-    redact_sensitive_data,
-    sanitize_keyword
-)
+if __package__ is None or __package__ == "":
+    from config import Config
+    from security import (
+        get_secure_path,
+        open_validated_log_file,
+        redact_sensitive_data,
+        sanitize_keyword
+    )
+else:
+    from .config import Config
+    from .security import (
+        get_secure_path,
+        open_validated_log_file,
+        redact_sensitive_data,
+        sanitize_keyword
+    )
 
 # 1. Setup Stderr Logging
 # In MCP servers, stdout is reserved for JSON-RPC communication.

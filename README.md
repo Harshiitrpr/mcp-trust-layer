@@ -19,11 +19,11 @@ A production-grade, security-hardened Model Context Protocol (MCP) server built 
 
 ## 🔒 Security Posture & Threat Model
 
-This codebase relies on **defense-in-depth**. For a complete analysis of assets and attackers, see [THREAT_MODEL.md](THREAT_MODEL.md).
+This codebase relies on **defense-in-depth**. For a complete analysis of assets and attackers, see [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
 
 | Threat / Attack Vector | Mitigation Strategy | Implementation Details |
 | :--- | :--- | :--- |
-| **Path Traversal** | Blocks access to system files (`/etc/passwd`). | 1. Input allowlist (`^[a-zA-Z0-9_\-\./]+$`).<br>2. Resolves path and verifies `Path.is_relative_to()`. |
+| **Path Traversal** | Blocks access to system files (`/etc/passwd`). | 1. Input allowlist (`^[a-zA-Z0-9_\-\.]+$`).<br>2. Resolves path and verifies `Path.is_relative_to()`. |
 | **Symlink / TOCTOU** | Prevents race condition swapping. | 1. Opens files using `os.O_NOFOLLOW` on Unix.<br>2. On Windows, handle-based validation. |
 | **Shell Injection** | Blocks OS command chaining. | 1. Reads files natively in Python.<br>2. Sanitizes keywords against shell metacharacters. |
 | **Data Leakage** | Prevents token exfiltration. | 1. Real-time regex redaction engine.<br>2. Masks API keys, JWTs, and AWS credentials. |
@@ -72,7 +72,7 @@ The server is configured using environment variables. If not provided, secure de
 
 Run the comprehensive unit test suite to verify security guards and tools functionality:
 ```bash
-python -m unittest test_server.py
+python -m unittest discover -s tests
 ```
 
 ---
@@ -89,7 +89,7 @@ To add this server to Claude Desktop, edit your `claude_desktop_config.json` (lo
     "secure-log-analyzer": {
       "command": "C:\\absolute\\path\\to\\.venv\\Scripts\\python.exe",
       "args": [
-        "C:\\absolute\\path\\to\\mcp-trust-layer\\server.py"
+        "C:\\absolute\\path\\to\\mcp-trust-layer\\src\\secure_log_analyzer\\server.py"
       ],
       "env": {
         "LOG_ANALYZER_BASE_DIR": "C:\\absolute\\path\\to\\mcp-trust-layer\\mock_logs",
@@ -108,7 +108,7 @@ To add this server to Claude Desktop, edit your `claude_desktop_config.json` (lo
 You can run and inspect the server using the MCP Inspector tool:
 
 ```bash
-npx -y @modelcontextprotocol/inspector C:\absolute\path\to\.venv\Scripts\python.exe C:\absolute\path\to\mcp-trust-layer\server.py
+npx -y @modelcontextprotocol/inspector C:\absolute\path\to\\.venv\Scripts\python.exe C:\absolute\path\to\mcp-trust-layer\src\secure_log_analyzer\server.py
 ```
 
 Open the URL output in your terminal to interactively call the tools and test validations.
