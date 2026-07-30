@@ -9,7 +9,8 @@ from security import (
     get_secure_path,
     open_validated_log_file,
     redact_sensitive_data,
-    sanitize_keyword
+    sanitize_keyword,
+    rate_limit
 )
 
 # 1. Setup Stderr Logging
@@ -27,6 +28,7 @@ logger = logging.getLogger("secure_log_analyzer")
 mcp = FastMCP("SecureLogAnalyzer")
 
 @mcp.tool()
+@rate_limit(max_calls=Config.RATE_LIMIT_LIST_LOG_FILES_MAX_CALLS, window_seconds=Config.RATE_LIMIT_LIST_LOG_FILES_WINDOW_SECONDS)
 def list_log_files() -> list[str]:
     """
     Lists files in the specific, designated safe directory.
@@ -67,6 +69,7 @@ class LogSummary(TypedDict):
     preview_truncated: bool
 
 @mcp.tool()
+@rate_limit(max_calls=Config.RATE_LIMIT_VIEW_LOG_SUMMARY_MAX_CALLS, window_seconds=Config.RATE_LIMIT_VIEW_LOG_SUMMARY_WINDOW_SECONDS)
 def view_log_summary(filename: str) -> LogSummary:
     """
     Reads a requested log file and returns its size, line count, and a brief preview.
@@ -135,6 +138,7 @@ def view_log_summary(filename: str) -> LogSummary:
     }
 
 @mcp.tool()
+@rate_limit(max_calls=Config.RATE_LIMIT_SEARCH_ERROR_PATTERNS_MAX_CALLS, window_seconds=Config.RATE_LIMIT_SEARCH_ERROR_PATTERNS_WINDOW_SECONDS)
 def search_error_patterns(filename: str, keyword: str) -> str:
     """
     Searches a given log file for specific keywords, with shell sanitization and output truncation.

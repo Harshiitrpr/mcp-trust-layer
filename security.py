@@ -1,8 +1,10 @@
 import os
 import re
 import stat
+import time
+from functools import wraps
 from pathlib import Path
-from typing import Match
+from typing import Match, Callable, Any
 
 # Import Windows-specific modules if running on Windows
 try:
@@ -219,3 +221,42 @@ def redact_sensitive_data(text: str) -> str:
     text = CREDENTIAL_REGEX.sub(credential_redact_callback, text)
 
     return text
+
+# Global state for rate limits: { "tool_name": [timestamp1, timestamp2, ...] }
+_rate_limits: dict[str, list[float]] = {}
+
+def rate_limit(max_calls: int, window_seconds: int) -> Callable:
+    """
+    Decorator to enforce rate limiting on MCP tools.
+    Limits the number of calls to `max_calls` within `window_seconds`.
+    Tracks limits independently for each tool based on the function name.
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            tool_name = func.__name__
+            now = time.time()
+            
+            # Initialize if not exists
+            if tool_name not in _rate_limits:
+                _rate_limits[tool_name] = []
+                
+            # Clean up old timestamps outside the window
+            _rate_limits[tool_name] = [
+                ts for ts in _rate_limits[tool_name]
+                if now - ts <= window_seconds
+            ]
+            
+            # Check if limit is exceeded
+            if len(_rate_limits[tool_name]) >= max_calls:
+                raise RuntimeError(
+                    f"Rate limit exceeded for {tool_name}. "
+                    f"Maximum {max_calls} calls per {window_seconds} seconds allowed."
+                )
+                
+            # Record this call
+            _rate_limits[tool_name].append(now)
+            
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator

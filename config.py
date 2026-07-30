@@ -29,6 +29,19 @@ class AppConfig:
     # to protect LLM context limits and client memory
     MAX_SEARCH_PAYLOAD_CHARS: int = field(default_factory=lambda: int(os.environ.get("LOG_ANALYZER_MAX_SEARCH_CHARS", 100_000)))
 
+    # Rate limiting for list_log_files tool
+    RATE_LIMIT_LIST_LOG_FILES_MAX_CALLS: int = field(default_factory=lambda: int(os.environ.get("LOG_ANALYZER_RATE_LIMIT_LIST_LOG_FILES_MAX_CALLS", 1)))
+    RATE_LIMIT_LIST_LOG_FILES_WINDOW_SECONDS: int = field(default_factory=lambda: int(os.environ.get("LOG_ANALYZER_RATE_LIMIT_LIST_LOG_FILES_WINDOW_SECONDS", 5)))
+
+    # Rate limiting for view_log_summary tool
+    RATE_LIMIT_VIEW_LOG_SUMMARY_MAX_CALLS: int = field(default_factory=lambda: int(os.environ.get("LOG_ANALYZER_RATE_LIMIT_VIEW_LOG_SUMMARY_MAX_CALLS", 50)))
+    RATE_LIMIT_VIEW_LOG_SUMMARY_WINDOW_SECONDS: int = field(default_factory=lambda: int(os.environ.get("LOG_ANALYZER_RATE_LIMIT_VIEW_LOG_SUMMARY_WINDOW_SECONDS", 60)))
+
+    # Rate limiting for search_error_patterns tool
+    RATE_LIMIT_SEARCH_ERROR_PATTERNS_MAX_CALLS: int = field(default_factory=lambda: int(os.environ.get("LOG_ANALYZER_RATE_LIMIT_SEARCH_ERROR_PATTERNS_MAX_CALLS", 20)))
+    RATE_LIMIT_SEARCH_ERROR_PATTERNS_WINDOW_SECONDS: int = field(default_factory=lambda: int(os.environ.get("LOG_ANALYZER_RATE_LIMIT_SEARCH_ERROR_PATTERNS_WINDOW_SECONDS", 60)))
+
+
     def __post_init__(self):
         # Validate positive limits
         if self.MAX_FILE_SIZE_BYTES <= 0:
@@ -41,6 +54,15 @@ class AppConfig:
             raise ValueError("LOG_ANALYZER_MAX_SEARCH_RESULTS must be positive")
         if self.MAX_SEARCH_PAYLOAD_CHARS <= 0:
             raise ValueError("LOG_ANALYZER_MAX_SEARCH_CHARS must be positive")
+            
+        # Validate rate limits
+        if self.RATE_LIMIT_LIST_LOG_FILES_MAX_CALLS <= 0 or self.RATE_LIMIT_LIST_LOG_FILES_WINDOW_SECONDS <= 0:
+            raise ValueError("LOG_ANALYZER_RATE_LIMIT_LIST_LOG_FILES values must be positive")
+        if self.RATE_LIMIT_VIEW_LOG_SUMMARY_MAX_CALLS <= 0 or self.RATE_LIMIT_VIEW_LOG_SUMMARY_WINDOW_SECONDS <= 0:
+            raise ValueError("LOG_ANALYZER_RATE_LIMIT_VIEW_LOG_SUMMARY values must be positive")
+        if self.RATE_LIMIT_SEARCH_ERROR_PATTERNS_MAX_CALLS <= 0 or self.RATE_LIMIT_SEARCH_ERROR_PATTERNS_WINDOW_SECONDS <= 0:
+            raise ValueError("LOG_ANALYZER_RATE_LIMIT_SEARCH_ERROR_PATTERNS values must be positive")
+
             
         # Validate base directory
         if not self.BASE_DIR.exists():

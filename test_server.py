@@ -444,5 +444,56 @@ class TestSecureLogAnalyzer(unittest.TestCase):
             with self.assertRaises(ValueError, msg=f"Failed to reject shell injection: {payload}"):
                 search_error_patterns("safe.log", payload)
 
+    # ==========================================
+    # 8. Rate Limiting Tests
+    # ==========================================
+    def test_rate_limit_enforcement(self):
+        import security
+        security._rate_limits.clear()
+        
+        # Create a file so list_log_files doesn't fail early
+        (self.base_path / "dummy.log").touch()
+        
+        new_config = dataclasses.replace(server.Config, RATE_LIMIT_LIST_LOG_FILES_MAX_CALLS=2)
+        with mock.patch('server.Config', new_config):
+            # Call 1: Success
+            server.list_log_files()
+            
+            # Call 2: Success
+            server.list_log_files()
+            
+            # Call 3: Exceeds limit
+            with self.assertRaises(RuntimeError) as context:
+                server.list_log_files()
+            self.assertIn("Rate limit exceeded for list_log_files", str(context.exception))
+
+    def test_rate_limit_independent_per_tool(self):
+        import security
+        security._rate_limits.clear()
+        
+        # Setup files
+        (self.base_path / "sys.log").write_text("Hello\n", encoding="utf-8")
+        
+        # Override limits
+        new_config = dataclasses.replace(
+            server.Config, 
+            RATE_LIMIT_LIST_LOG_FILES_MAX_CALLS=1,
+            RATE_LIMIT_VIEW_LOG_SUMMARY_MAX_CALLS=1
+        )
+        
+        with mock.patch('server.Config', new_config):
+            # Call list_log_files once (reaches limit)
+            server.list_log_files()
+            
+            with self.assertRaises(RuntimeError):
+                server.list_log_files()
+                
+            # Even though list_log_files is exhausted, view_log_summary should still work (limit is 1)
+            summary = server.view_log_summary("sys.log")
+            self.assertEqual(summary["filename"], "sys.log")
+            
+            with self.assertRaises(RuntimeError):
+                server.view_log_summary("sys.log")
+
 if __name__ == "__main__":
     unittest.main()
