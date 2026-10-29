@@ -1,2 +1,2 @@
-fastmcp==3.4.4
+fastmcp==3.4.10
 pywin32==312; sys_platform == 'win32'
